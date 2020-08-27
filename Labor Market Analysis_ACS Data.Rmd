@@ -1,0 +1,185 @@
+
+```{r}
+#Necessary Packages
+library(tidyverse)
+library(stargazer)
+library(car)
+```
+
+```{r}
+###                       Data Cleaning                        ###
+#rename to df 
+df <- psam_p53
+#initial cleaning - no NA income, no NA commute time, income > $0
+df_clean <- filter(df, !is.na(df$PERNP) & !is.na(df$JWMNP) & df$PERNP >0)
+```
+
+```{r}
+#removing unwanted populations
+df_clean <- subset(df, df$PINCP > 0 & df$AGEP < 65 & !is.na(df$JWMNP))
+#keeping only columns used in our model
+keeps <- c("PINCP", "JWMNP", "AGEP", "RAC1P", "SEX", "SCHL", "ENG", "COW", "WKHP")
+df_clean_small <- df_clean[keeps]
+```
+
+```{r}
+df_clean_small[is.na(df_clean_small)] <- 1
+```
+
+```{r}
+#check to make sure no NA values remain
+colSums(is.na(df_clean_small))
+```
+
+```{r}
+####        Attach Data       ####
+attach(df_clean_small)
+```
+
+```{r}
+###                     Creating Variables                      ###
+
+#BINNING1 - SEX ( 1 = Male 2 = FEMALE)
+Male <- ifelse(SEX == 1, 1, 0)
+Female <- ifelse(SEX == 2, 1, 0)
+
+#BINNING2 - RACE (1: White, 1~9:Non White )
+White <- ifelse(RAC1P == 1, 1, 0 )
+Nonwhite <- ifelse(RAC1P > 1, 1, 0)
+
+#BINNING3 - EDUCATION (1-15: NonHSGraduate, 16-20: HSdegree, 21: BAdegree, 22-24:advancedDegree)
+NonHSgrad <- ifelse(SCHL < 15 & AGEP > 18, 1, 0)
+HSgrad <- ifelse(SCHL == 16, 1, 0)
+BAdegree <- ifelse(SCHL == 21, 1, 0)
+AdvanceDegree <- ifelse(SCHL >= 22, 1, 0)
+
+#BINNING4 - English Proficiency 
+ENGproficient <- ifelse(ENG < 3, 1, 0)
+ENGnonProficient <- ifelse(ENG > 2, 1, 0)
+
+#BINNING5 - Employment Type 
+Private <- ifelse(COW == 1, 1, 0)
+NotForProfit <- ifelse(COW ==2, 1, 0)
+Public <- ifelse(COW >= 3 & COW<= 5, 1, 0)
+
+#Square Terms
+AGEP2 <- AGEP*AGEP
+JWMNP2 <- JWMNP*JWMNP
+
+#BINNIG 8 - Commute time 
+ten_or_less<- ifelse (JWMNP >= 0 & JWMNP <=10,  1, 0)
+ten_to_thirty <- ifelse (JWMNP > 10 & JWMNP <=30, 1, 0)
+thirty_to_sixty <-ifelse(JWMNP >30  & JWMNP <=60, 1, 0)
+sixty_to_ninety <-ifelse(JWMNP >60  & JWMNP <=90, 1, 0)
+greater_ninety <- ifelse(JWMNP >90,1, 0)
+```
+
+```{r}
+#Summary Statistics
+df3 <- data.frame(Female,Public,NotForProfit,JWMNP,AGEP,Nonwhite,HSgrad,BAdegree,AdvanceDegree,ENGnonProficient,WKHP,PINCP)
+summary(df3)
+```
+
+
+
+```{r}
+#########                   Graphs                    #############
+income <- df_clean_small$PINCP 
+commuteTime <- df_clean_small$JWMNP 
+  
+#Plot graph1 - Income and Commute Time  
+graph1 <- plot(commuteTime, log(income), xlab = "Commute Time", ylab = "Income", main = "Income and Commute Time",ylim = c(0,15), xlim = c(0, 200), col="blue")  
+  
+model.fit <- lm(log(income)~df_clean_small$JWMNP) 
+summary(model.fit) 
+abline(model.fit, col = "red")
+```
+
+```{r}
+#Plot graph2 - Income and WKHP 
+  
+graph2 <- plot(df_clean_small$WKHP, log(income),xlab = "Hours worked", ylab = "Income", main = "Income and Hours worked per week",ylim = c(0,15), xlim = c(0, 200), col="blue")  
+  
+model.fit2 <- lm(log(income)~df_clean_small$WKHP) 
+summary(model.fit2) 
+abline(model.fit2, col = "red") 
+```
+
+```{r}
+#Plot graph2 - Income and Age 
+graph3 <- plot(df_clean_small$AGEP, log(income),xlab = "Age", ylab = "Income", main = "Income and Age",ylim = c(0,15), xlim = c(0, 200), col="blue")  
+  
+model.fit3 <- lm(log(income)~df_clean_small$AGEP) 
+summary(model.fit3) 
+abline(model.fit3, col = "red") 
+```
+
+```{r}
+####        Models for Question 1           ####
+#OLS for Question 1
+Model_1 <- lm(log(PINCP) ~ Female + Public  + NotForProfit + JWMNP + AGEP + Nonwhite + HSgrad + BAdegree + AdvanceDegree + ENGnonProficient + WKHP)
+Model_2 <- lm(log(PINCP) ~ Female*Public + Female*NotForProfit + Female* + NotForProfit + JWMNP + AGEP + Nonwhite + HSgrad + BAdegree + AdvanceDegree + ENGnonProficient + WKHP) #With Interactive
+
+#Square Age
+Model_3 <- lm(log(PINCP) ~ Female + Public  + NotForProfit + JWMNP + AGEP2 + Nonwhite + HSgrad + BAdegree + AdvanceDegree + ENGnonProficient + WKHP)
+Model_4 <- lm(log(PINCP) ~ Female*Public + Female*NotForProfit + NotForProfit + JWMNP + JWMNP2 + AGEP + AGEP2 + Nonwhite + HSgrad + BAdegree + AdvanceDegree + ENGnonProficient + WKHP) #With Interactive
+```
+
+```{r}
+#VIF on basic Model
+vif(Model_4)
+```
+
+```{r}
+#Summary for Q1
+stargazer(Model_4, type = "text", digits = 4)
+
+"""
+Bullet Points (holding all else constant):
+1. Women in Washington State can expect to make 25% less than their male counterparts
+2. All workers in the public sector can expect to make 3.7% less than their for profit colleagues
+3. All workers in the Not For Profit sector can expect a pay penalty of around 15%
+4. Nonwhite workers can expect 4.5% less pay than their white counterparts
+5. Being non-english proficient has a pay penalty of 47.4% in Washington State.
+6. There is no statistically significant pay gap in the public sector.
+7. The magnitude of the gender pay gap is reduced by 19.06% if women work in the not for profit sector (Not 100% certain on this interpretation.)
+8. Model explains 49% of variation in our dependent variable which is the log of income.
+"""
+```
+
+```{r}
+#OLS for Question 2
+Model_5 <- lm(log(PINCP) ~ JWMNP + Female + Public  + NotForProfit + AGEP + Nonwhite + HSgrad + BAdegree + AdvanceDegree + ENGnonProficient + WKHP)
+Model_6 <- lm(log(PINCP) ~ JWMNP*Female + Public  + NotForProfit + AGEP + Nonwhite + HSgrad + BAdegree + AdvanceDegree + ENGnonProficient + WKHP) #With Interactive
+
+#Square Commute
+Model_7 <- lm(log(PINCP) ~ JWMNP2 + Female + AGEP + Nonwhite + HSgrad + BAdegree + AdvanceDegree + ENGnonProficient + WKHP)
+Model_8 <- lm(log(PINCP) ~  JWMNP + JWMNP2 + JWMNP*Female + JWMNP2*Female + AGEP + AGEP2 + Nonwhite + HSgrad + BAdegree + AdvanceDegree + ENGnonProficient + WKHP) #With Interactive
+```
+
+```{r}
+#VIF on Basic Model
+vif(Model_8)
+```
+
+
+```{r}
+#Summary for Q2
+stargazer(Model_8, type = "text", digits = 4)
+
+"""
+1. There is a positive relationship between commute time and income
+2. There is no statistically significant difference in returns to commute time for women verses their male counterparts.
+3. It should be noted it is highly probable that income determines commute time as well. That is to say, our dependent variable is correlated with our independent variable of interest. It is appropriate to use the 2 stage least squares method in this case. However, that is beyond the scope of this course.
+"""
+```
+
+
+```{r}
+#Combined view of both Models (Just an option to keep paper simpler looking?)
+stargazer(Model_4, Model_8, type = "text", digits = 4)
+```
+
+
+
+
